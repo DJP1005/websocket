@@ -11,6 +11,7 @@
         table { width: 80%; margin: 20px auto; border-collapse: collapse; }
         th, td { border: 1px solid black; padding: 10px; text-align: center; }
         th { background-color: #f2f2f2; }
+        .confirmed { background-color: #d4edda; } /* Zielone podświetlenie */
     </style>
 </head>
 <body>
@@ -24,6 +25,7 @@
                 <th>Czas Włączenia</th>
                 <th>Czas Wyłączenia</th>
                 <th>Usuń</th>
+                <th>Ustaw</th>
             </tr>
         </thead>
         <tbody></tbody>
@@ -47,13 +49,14 @@
         function addRow() {
             const table = document.getElementById("scheduleTable").querySelector("tbody");
             const row = table.insertRow();
-            const rowIndex = row.rowIndex;
+            const rowIndex = table.rows.length;
 
             row.innerHTML = `
                 <td>${rowIndex}</td>
                 <td><input type="time" step="1" class="onTime"></td>
                 <td><input type="time" step="1" class="offTime"></td>
                 <td><button onclick="removeRow(${rowIndex})">Usuń</button></td>
+                <td><button onclick="confirmRow(this, ${rowIndex})">Ustaw</button></td>
             `;
         }
 
@@ -63,14 +66,28 @@
             client.publish("esp32/schedule", `REMOVE ${index - 1}`);
         }
 
-        document.querySelector("button").addEventListener("click", () => {
-            const rows = document.querySelectorAll("tbody tr");
-            rows.forEach((row, index) => {
-                const onTime = row.querySelector(".onTime").value.split(":");
-                const offTime = row.querySelector(".offTime").value.split(":");
-                client.publish("esp32/schedule", `ADD ${onTime[0]}:${onTime[1]}:${onTime[2]} ${offTime[0]}:${offTime[1]}:${offTime[2]}`);
-            });
-        });
+        function confirmRow(button, index) {
+            const row = button.parentElement.parentElement;
+            const onTime = row.querySelector(".onTime").value;
+            const offTime = row.querySelector(".offTime").value;
+
+            if (onTime && offTime) {
+                const [onHour, onMinute, onSecond] = onTime.split(":").map(Number);
+                const [offHour, offMinute, offSecond] = offTime.split(":").map(Number);
+
+                // Publikuj harmonogram do ESP32
+                client.publish(
+                    "esp32/schedule",
+                    `ADD ${onHour}:${onMinute}:${onSecond || 0} ${offHour}:${offMinute}:${offSecond || 0}`
+                );
+
+                // Potwierdzenie ustawienia
+                row.classList.add("confirmed");
+                button.disabled = true; // Wyłącz przycisk ustawiania
+            } else {
+                alert("Wprowadź czas włączenia i wyłączenia!");
+            }
+        }
     </script>
 </body>
 </html>

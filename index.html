@@ -37,17 +37,17 @@
         const statusText = document.getElementById("status");
 
         client.on('connect', () => {
-            console.log("Połączono z MQTT!");
+            console.log(`Połączono z MQTT!`);
             client.subscribe(topic, (err) => {
                 if (!err) {
-                    console.log(Subskrybowano temat: ${topic});
+                    console.log(`Subskrybowano temat: ${topic}`);
                     statusText.innerText = "Status: Subskrybowano!";
                 }
             });
         });
 
         client.on('message', (receivedTopic, message) => {
-            console.log(Odebrano wiadomość: ${message.toString()});
+            console.log(`Odebrano wiadomość: ${message.toString()}`);
             if (receivedTopic === topic && message.toString() === "pressed") {
                 lamp.style.backgroundColor = "green";
                 statusText.innerText = "Przycisk wciśnięty!";

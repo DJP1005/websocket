@@ -3,9 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ESP32 Button Status</title>
+    <title>ESP32 Time and Button</title>
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 20px;
+        }
         #lamp {
             width: 50px;
             height: 50px;
@@ -13,60 +18,64 @@
             border-radius: 50%;
             margin: 20px auto;
         }
-        body {
-            font-family: Arial, sans-serif;
-            text-align: center;
-            padding: 20px;
-        }
-
-        button {
-            padding: 10px 20px;
-            font-size: 16px;
-            cursor: pointer;
+        #clock {
+            font-size: 48px;
+            color: green;
+            margin: 20px;
         }
     </style>
 </head>
 <body>
-    <h1>Status Przycisku ESP32</h1>
+    <h1>ESP32 RTC i Przycisk</h1>
+    <div id="clock">Ładowanie czasu...</div>
     <div id="lamp"></div>
     <p id="status">Status: Oczekiwanie...</p>
 
     <script>
+        // Konfiguracja MQTT
         const brokerUrl = "wss://a31df1c7edfa40919da78498f7711dee.s1.eu.hivemq.cloud:8884/mqtt";
         const options = {
-            username: "websocket2", // Podaj swoje dane logowania
+            username: "websocket2",
             password: "Pawel1005",
             clean: true,
             connectTimeout: 4000,
             reconnectPeriod: 1000,
         };
 
-        const client = mqtt.connect(brokerUrl, options);
+        const topicTime = "esp32/time";
+        const topicButton = "esp32/button";
 
-        const topic = "esp32/button";
+        const clockDiv = document.getElementById("clock");
         const lamp = document.getElementById("lamp");
         const statusText = document.getElementById("status");
 
+        const client = mqtt.connect(brokerUrl, options);
+
         client.on('connect', () => {
-            console.log(`Połączono z MQTT!`);
-            client.subscribe(topic, (err) => {
+            console.log("Połączono z MQTT!");
+            client.subscribe([topicTime, topicButton], (err) => {
                 if (!err) {
-                    console.log(`Subskrybowano temat: ${topic}`);
-                    statusText.innerText = "Status: Subskrybowano!";
+                    console.log(`Subskrybowano tematy: ${topicTime}, ${topicButton}`);
                 }
             });
         });
 
         client.on('message', (receivedTopic, message) => {
-            console.log(`Odebrano wiadomość: ${message.toString()}`);
-            if (receivedTopic === topic && message.toString() === "pressed") {
+            if (receivedTopic === topicTime) {
+                clockDiv.innerText = `Czas: ${message.toString()}`;
+            }
+            if (receivedTopic === topicButton && message.toString() === "pressed") {
                 lamp.style.backgroundColor = "green";
                 statusText.innerText = "Przycisk wciśnięty!";
                 setTimeout(() => {
                     lamp.style.backgroundColor = "gray";
                     statusText.innerText = "Status: Oczekiwanie...";
-                }, 2000); // Lampka wraca do szarego koloru po 2 sekundach
+                }, 2000);
             }
+        });
+
+        client.on('error', (error) => {
+            console.error("Błąd MQTT:", error);
         });
     </script>
 </body>

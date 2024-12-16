@@ -3,82 +3,71 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ESP32 RTC i Przycisk</title>
+    <title>ESP32 Zegar i Harmonogram</title>
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            text-align: center;
-            margin: 20px;
-        }
-        #lamp {
-            width: 50px;
-            height: 50px;
-            background-color: gray;
-            border-radius: 50%;
-            margin: 20px auto;
-        }
-        #clock {
-            font-size: 36px;
-            color: green;
-            margin: 20px;
-        }
+        body { font-family: Arial, sans-serif; text-align: center; margin: 20px; }
+        #lamp { width: 50px; height: 50px; background-color: gray; border-radius: 50%; margin: 10px auto; }
+        #clock { font-size: 36px; color: green; margin: 10px; }
     </style>
 </head>
 <body>
-    <h1>ESP32 RTC i Przycisk</h1>
+    <h1>ESP32 Zegar i Harmonogram</h1>
     <div id="clock">Czas: Ładowanie...</div>
     <div id="lamp"></div>
     <p id="status">Status: Oczekiwanie...</p>
 
+    <h2>Dodaj czas włączenia/wyłączenia</h2>
+    <input type="time" id="timeInput">
+    <select id="stateInput">
+        <option value="1">Włącz</option>
+        <option value="0">Wyłącz</option>
+    </select>
+    <button onclick="addSchedule()">Dodaj do harmonogramu</button>
+
     <script>
-        // MQTT Konfiguracja
         const brokerUrl = "wss://a31df1c7edfa40919da78498f7711dee.s1.eu.hivemq.cloud:8884/mqtt";
-        const options = {
-            username: "websocket2",
-            password: "Pawel1005",
-            clean: true,
-            connectTimeout: 4000,
-            reconnectPeriod: 1000,
-        };
+        const options = { username: "websocket2", password: "Pawel1005", reconnectPeriod: 1000 };
+        const client = mqtt.connect(brokerUrl, options);
 
         const topicTime = "esp32/time";
         const topicButton = "esp32/button";
+        const topicSchedule = "esp32/schedule";
 
         const clockDiv = document.getElementById("clock");
         const lamp = document.getElementById("lamp");
         const statusText = document.getElementById("status");
 
-        const client = mqtt.connect(brokerUrl, options);
-
         client.on('connect', () => {
-            console.log("Połączono z MQTT!");
-            client.subscribe([topicTime, topicButton], (err) => {
-                if (!err) {
-                    console.log(`Subskrybowano tematy: ${topicTime}, ${topicButton}`);
-                }
-            });
+            client.subscribe([topicTime, topicButton]);
         });
 
-        client.on('message', (receivedTopic, message) => {
-            if (receivedTopic === topicTime) {
-                clockDiv.innerText = `Czas: ${message.toString()}`;
-            }
-            if (receivedTopic === topicButton) {
-                const msg = message.toString();
+        client.on('message', (topic, message) => {
+            const msg = message.toString();
+            if (topic === topicTime) {
+                clockDiv.innerText = `Czas: ${msg}`;
+            } else if (topic === topicButton) {
                 if (msg === "pressed") {
                     lamp.style.backgroundColor = "green";
                     statusText.innerText = "Przycisk wciśnięty!";
-                } else if (msg === "released") {
+                } else {
                     lamp.style.backgroundColor = "gray";
                     statusText.innerText = "Status: Oczekiwanie...";
                 }
             }
         });
 
-        client.on('error', (error) => {
-            console.error("Błąd MQTT:", error);
-        });
+        function addSchedule() {
+            const time = document.getElementById("timeInput").value;
+            const state = document.getElementById("stateInput").value;
+            if (time) {
+                const [hour, minute] = time.split(":");
+                client.publish(topicSchedule, `${hour}:${minute}:${state}`);
+                alert(`Dodano: ${hour}:${minute}, Stan: ${state == 1 ? "Włącz" : "Wyłącz"}`);
+            } else {
+                alert("Wprowadź czas!");
+            }
+        }
     </script>
 </body>
 </html>

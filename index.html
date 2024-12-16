@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ESP32 Time and Button</title>
+    <title>ESP32 RTC i Przycisk</title>
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
         body {
@@ -19,7 +19,7 @@
             margin: 20px auto;
         }
         #clock {
-            font-size: 48px;
+            font-size: 36px;
             color: green;
             margin: 20px;
         }
@@ -27,12 +27,12 @@
 </head>
 <body>
     <h1>ESP32 RTC i Przycisk</h1>
-    <div id="clock">Ładowanie czasu...</div>
+    <div id="clock">Czas: Ładowanie...</div>
     <div id="lamp"></div>
     <p id="status">Status: Oczekiwanie...</p>
 
     <script>
-        // Konfiguracja MQTT
+        // MQTT Konfiguracja
         const brokerUrl = "wss://a31df1c7edfa40919da78498f7711dee.s1.eu.hivemq.cloud:8884/mqtt";
         const options = {
             username: "websocket2",
@@ -64,13 +64,15 @@
             if (receivedTopic === topicTime) {
                 clockDiv.innerText = `Czas: ${message.toString()}`;
             }
-            if (receivedTopic === topicButton && message.toString() === "pressed") {
-                lamp.style.backgroundColor = "green";
-                statusText.innerText = "Przycisk wciśnięty!";
-                setTimeout(() => {
+            if (receivedTopic === topicButton) {
+                const msg = message.toString();
+                if (msg === "pressed") {
+                    lamp.style.backgroundColor = "green";
+                    statusText.innerText = "Przycisk wciśnięty!";
+                } else if (msg === "released") {
                     lamp.style.backgroundColor = "gray";
                     statusText.innerText = "Status: Oczekiwanie...";
-                }, 2000);
+                }
             }
         });
 

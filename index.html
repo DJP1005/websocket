@@ -8,6 +8,7 @@
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 20px; }
         #clock { font-size: 36px; color: green; margin: 10px; }
+        #lamp { width: 50px; height: 50px; background-color: gray; border-radius: 50%; margin: 10px auto; }
         table { width: 80%; margin: 20px auto; border-collapse: collapse; }
         th, td { border: 1px solid black; padding: 10px; text-align: center; }
         th { background-color: #f2f2f2; }
@@ -17,6 +18,7 @@
 <body>
     <h1>ESP32 Harmonogram</h1>
     <div id="clock">Czas: Ładowanie...</div>
+    <div id="lamp"></div>
 
     <table id="scheduleTable">
         <thead>
@@ -36,13 +38,27 @@
         const brokerUrl = "wss://a31df1c7edfa40919da78498f7711dee.s1.eu.hivemq.cloud:8884/mqtt";
         const client = mqtt.connect(brokerUrl, { username: "websocket2", password: "Pawel1005" });
 
+        const topicTime = "esp32/time";
+        const topicButton = "esp32/button";
+
+        const lamp = document.getElementById("lamp");
+        const clockDiv = document.getElementById("clock");
+
         client.on('connect', () => {
-            client.subscribe("esp32/time");
+            client.subscribe([topicTime, topicButton]);
         });
 
         client.on('message', (topic, message) => {
-            if (topic === "esp32/time") {
-                document.getElementById("clock").innerText = `Czas: ${message.toString()}`;
+            const msg = message.toString();
+
+            if (topic === topicTime) {
+                clockDiv.innerText = `Czas: ${msg}`;
+            } else if (topic === topicButton) {
+                if (msg === "pressed") {
+                    lamp.style.backgroundColor = "green";
+                } else if (msg === "released") {
+                    lamp.style.backgroundColor = "gray";
+                }
             }
         });
 

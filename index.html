@@ -3,31 +3,36 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ESP32 Harmonogram</title>
+    <title>ESP32 Przekaźniki</title>
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 20px; }
         #clock { font-size: 36px; color: green; margin: 10px; }
-        #lamp { width: 50px; height: 50px; background-color: gray; border-radius: 50%; margin: 10px auto; }
         table { width: 80%; margin: 20px auto; border-collapse: collapse; }
         th, td { border: 1px solid black; padding: 10px; text-align: center; }
         th { background-color: #f2f2f2; }
-        .confirmed { background-color: #d4edda; } /* Zielone podświetlenie */
     </style>
 </head>
 <body>
-    <h1>ESP32 Harmonogram</h1>
+    <h1>ESP32 Przekaźniki</h1>
     <div id="clock">Czas: Ładowanie...</div>
-    <div id="lamp"></div>
 
+    <h2>Stan przekaźników</h2>
+    <div id="relays">
+        <span id="relay1" style="color: gray;">Przekaźnik 1: OFF</span><br>
+        <span id="relay2" style="color: gray;">Przekaźnik 2: OFF</span><br>
+        <span id="relay3" style="color: gray;">Przekaźnik 3: OFF</span><br>
+        <span id="relay4" style="color: gray;">Przekaźnik 4: OFF</span><br>
+    </div>
+
+    <h2>Harmonogram</h2>
     <table id="scheduleTable">
         <thead>
             <tr>
-                <th>Nr</th>
+                <th>Przekaźnik</th>
                 <th>Czas Włączenia</th>
                 <th>Czas Wyłączenia</th>
                 <th>Usuń</th>
-                <th>Ustaw</th>
             </tr>
         </thead>
         <tbody></tbody>
@@ -39,25 +44,22 @@
         const client = mqtt.connect(brokerUrl, { username: "websocket2", password: "Pawel1005" });
 
         const topicTime = "esp32/time";
-        const topicButton = "esp32/button";
-
-        const lamp = document.getElementById("lamp");
-        const clockDiv = document.getElementById("clock");
+        const topicStatus = "esp32/status";
+        const topicSchedule = "esp32/schedule";
 
         client.on('connect', () => {
-            client.subscribe([topicTime, topicButton]);
+            client.subscribe([topicTime, topicStatus]);
         });
 
         client.on('message', (topic, message) => {
-            const msg = message.toString();
-
             if (topic === topicTime) {
-                clockDiv.innerText = `Czas: ${msg}`;
-            } else if (topic === topicButton) {
-                if (msg === "pressed") {
-                    lamp.style.backgroundColor = "green";
-                } else if (msg === "released") {
-                    lamp.style.backgroundColor = "gray";
+                document.getElementById("clock").innerText = `Czas: ${message.toString()}`;
+            } else if (topic === topicStatus) {
+                const states = message.toString().split(',');
+                for (let i = 0; i < states.length; i++) {
+                    const relay = document.getElementById(`relay${i + 1}`);
+                    relay.innerText = `Przekaźnik ${i + 1}: ${states[i] === "1" ? "ON" : "OFF"}`;
+                    relay.style.color = states[i] === "1" ? "green" : "gray";
                 }
             }
         });
@@ -65,45 +67,38 @@
         function addRow() {
             const table = document.getElementById("scheduleTable").querySelector("tbody");
             const row = table.insertRow();
-            const rowIndex = table.rows.length;
+            const rowIndex = table.rows.length - 1;
 
             row.innerHTML = `
-                <td>${rowIndex}</td>
+                <td>
+                    <select class="relaySelect">
+                        <option value="0">Przekaźnik 1</option>
+                        <option value="1">Przekaźnik 2</option>
+                        <option value="2">Przekaźnik 3</option>
+                        <option value="3">Przekaźnik 4</option>
+                    </select>
+                </td>
                 <td><input type="time" step="1" class="onTime"></td>
                 <td><input type="time" step="1" class="offTime"></td>
                 <td><button onclick="removeRow(${rowIndex})">Usuń</button></td>
-                <td><button onclick="confirmRow(this, ${rowIndex})">Ustaw</button></td>
             `;
         }
 
         function removeRow(index) {
             const table = document.getElementById("scheduleTable").querySelector("tbody");
-            table.deleteRow(index - 1); // Dopasowanie indeksów
-            client.publish("esp32/schedule", `REMOVE ${index - 1}`);
+            table.deleteRow(index);
+            client.publish(topicSchedule, `REMOVE ${index}`);
         }
 
-        function confirmRow(button, index) {
-            const row = button.parentElement.parentElement;
-            const onTime = row.querySelector(".onTime").value;
-            const offTime = row.querySelector(".offTime").value;
-
-            if (onTime && offTime) {
-                const [onHour, onMinute, onSecond] = onTime.split(":").map(Number);
-                const [offHour, offMinute, offSecond] = offTime.split(":").map(Number);
-
-                // Publikuj harmonogram do ESP32
-                client.publish(
-                    "esp32/schedule",
-                    `ADD ${onHour}:${onMinute}:${onSecond || 0} ${offHour}:${offMinute}:${offSecond || 0}`
-                );
-
-                // Potwierdzenie ustawienia
-                row.classList.add("confirmed");
-                button.disabled = true; // Wyłącz przycisk ustawiania
-            } else {
-                alert("Wprowadź czas włączenia i wyłączenia!");
-            }
-        }
+        document.querySelector("button").addEventListener("click", () => {
+            const rows = document.querySelectorAll("tbody tr");
+            rows.forEach((row) => {
+                const relay = row.querySelector(".relaySelect").value;
+                const onTime = row.querySelector(".onTime").value.split(":");
+                const offTime = row.querySelector(".offTime").value.split(":");
+                client.publish(topicSchedule, `ADD ${relay} ${onTime[0]}:${onTime[1]} ${offTime[0]}:${offTime[1]}`);
+            });
+        });
     </script>
 </body>
 </html>

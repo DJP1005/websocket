@@ -11,6 +11,7 @@
         table { width: 80%; margin: 20px auto; border-collapse: collapse; }
         th, td { border: 1px solid black; padding: 10px; text-align: center; }
         th { background-color: #f2f2f2; }
+        .confirmed { background-color: #d4edda; } /* Zielone podświetlenie */
     </style>
 </head>
 <body>
@@ -33,6 +34,7 @@
                 <th>Czas Włączenia</th>
                 <th>Czas Wyłączenia</th>
                 <th>Usuń</th>
+                <th>Ustaw</th>
             </tr>
         </thead>
         <tbody></tbody>
@@ -49,6 +51,7 @@
 
         client.on('connect', () => {
             client.subscribe([topicTime, topicStatus]);
+            restoreData(); // Przywróć zapisane dane po połączeniu
         });
 
         client.on('message', (topic, message) => {
@@ -61,6 +64,7 @@
                     relay.innerText = `Przekaźnik ${i + 1}: ${states[i] === "1" ? "ON" : "OFF"}`;
                     relay.style.color = states[i] === "1" ? "green" : "gray";
                 }
+                saveRelayStates(states); // Zapisz stan przekaźników w LocalStorage
             }
         });
 
@@ -81,24 +85,92 @@
                 <td><input type="time" step="1" class="onTime"></td>
                 <td><input type="time" step="1" class="offTime"></td>
                 <td><button onclick="removeRow(${rowIndex})">Usuń</button></td>
+                <td><button onclick="confirmRow(this, ${rowIndex})">Ustaw</button></td>
             `;
+
+            saveSchedule(); // Zapisz harmonogram po dodaniu nowego wiersza
         }
 
         function removeRow(index) {
             const table = document.getElementById("scheduleTable").querySelector("tbody");
             table.deleteRow(index);
-            client.publish(topicSchedule, `REMOVE ${index}`);
+            saveSchedule(); // Zapisz harmonogram po usunięciu wiersza
         }
 
-        document.querySelector("button").addEventListener("click", () => {
-            const rows = document.querySelectorAll("tbody tr");
-            rows.forEach((row) => {
+        function confirmRow(button, index) {
+            const row = button.parentElement.parentElement;
+            const onTime = row.querySelector(".onTime").value;
+            const offTime = row.querySelector(".offTime").value;
+            const relay = row.querySelector(".relaySelect").value;
+
+            if (onTime && offTime) {
+                const [onHour, onMinute] = onTime.split(":").map(Number);
+                const [offHour, offMinute] = offTime.split(":").map(Number);
+
+                // Publikuj harmonogram do ESP32
+                client.publish(topicSchedule, `ADD ${relay} ${onHour}:${onMinute} ${offHour}:${offMinute}`);
+
+                // Potwierdzenie ustawienia
+                row.classList.add("confirmed");
+                button.disabled = true; // Wyłącz przycisk ustawiania
+                saveSchedule(); // Zapisz harmonogram po potwierdzeniu
+            } else {
+                alert("Wprowadź czas włączenia i wyłączenia!");
+            }
+        }
+
+        function saveRelayStates(states) {
+            localStorage.setItem("relayStates", JSON.stringify(states));
+        }
+
+        function saveSchedule() {
+            const rows = document.querySelectorAll("#scheduleTable tbody tr");
+            const schedule = [];
+            rows.forEach(row => {
                 const relay = row.querySelector(".relaySelect").value;
-                const onTime = row.querySelector(".onTime").value.split(":");
-                const offTime = row.querySelector(".offTime").value.split(":");
-                client.publish(topicSchedule, `ADD ${relay} ${onTime[0]}:${onTime[1]} ${offTime[0]}:${offTime[1]}`);
+                const onTime = row.querySelector(".onTime").value;
+                const offTime = row.querySelector(".offTime").value;
+                schedule.push({ relay, onTime, offTime });
             });
-        });
+            localStorage.setItem("schedule", JSON.stringify(schedule));
+        }
+
+        function restoreData() {
+            // Przywróć stan przekaźników
+            const relayStates = JSON.parse(localStorage.getItem("relayStates"));
+            if (relayStates) {
+                relayStates.forEach((state, i) => {
+                    const relay = document.getElementById(`relay${i + 1}`);
+                    relay.innerText = `Przekaźnik ${i + 1}: ${state === "1" ? "ON" : "OFF"}`;
+                    relay.style.color = state === "1" ? "green" : "gray";
+                });
+            }
+
+            // Przywróć harmonogram
+            const schedule = JSON.parse(localStorage.getItem("schedule"));
+            if (schedule) {
+                const table = document.getElementById("scheduleTable").querySelector("tbody");
+                schedule.forEach(task => {
+                    const row = table.insertRow();
+                    const rowIndex = table.rows.length - 1;
+
+                    row.innerHTML = `
+                        <td>
+                            <select class="relaySelect">
+                                <option value="0" ${task.relay === "0" ? "selected" : ""}>Przekaźnik 1</option>
+                                <option value="1" ${task.relay === "1" ? "selected" : ""}>Przekaźnik 2</option>
+                                <option value="2" ${task.relay === "2" ? "selected" : ""}>Przekaźnik 3</option>
+                                <option value="3" ${task.relay === "3" ? "selected" : ""}>Przekaźnik 4</option>
+                            </select>
+                        </td>
+                        <td><input type="time" step="1" class="onTime" value="${task.onTime}"></td>
+                        <td><input type="time" step="1" class="offTime" value="${task.offTime}"></td>
+                        <td><button onclick="removeRow(${rowIndex})">Usuń</button></td>
+                        <td><button onclick="confirmRow(this, ${rowIndex})" class="confirmButton">Ustaw</button></td>
+                    `;
+                });
+            }
+        }
     </script>
 </body>
 </html>
